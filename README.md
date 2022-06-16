@@ -1,4 +1,5 @@
 # Green-Circle
+[Link to the event](https://www.codingame.com/contests/green-circle).
 
 ![alt text](https://static.codingame.com/servlet/fileservlet?id=85391284385554)
 
