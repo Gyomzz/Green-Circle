@@ -6,6 +6,7 @@ import scala.collection.mutable._
 case class Skill(val id: Int, val name: String, val amountNeeded: Int)
 
 class Application(val id: Int, val skillsNeeds: Array[Skill]) {
+
     def cost(): Int = {
         skillsNeeds.map(_.amountNeeded).sum
     }
@@ -18,30 +19,21 @@ class Application(val id: Int, val skillsNeeds: Array[Skill]) {
         skillsNeeds.filter(_.amountNeeded != 0).map(_.name )
     }
 
-    def debtIfRelease(teamHand: ArrayBuffer[Card]): Int = {
+    def technicalPoints(teamHand: ListBuffer[Card], teamBonusAmount: Int): Int = {
+        var tech = 0
         for(skill <- skillsNeeds) {
-            if(enoughGoodCard(skill.amountNeeded, teamHand.filter(_.name == skill.name).length)) 
-            teamHand.filter(_.name == skill.name).foreach(_.points += 2)
+            tech += (teamHand.filter(_.name == skill.name).take(skill.amountNeeded / 2).length * 2)  
         }
-        if(canReleaseWithoutDebt(teamHand, teamHand.filter(_.name == "BONUS").length)) 0 else cost - teamHand.map(_.points).sum    
+        tech += teamBonusAmount
+        tech
     }
 
-    def canReleaseWithoutDebt(teamHand: ArrayBuffer[Card], teamBonusAmount: Int): Boolean = {
-        cost > teamHand.filter(_.name != "BONUS").filter(_.name != "TECHNICAL_DEBT").map(_.points).sum + teamBonusAmount
-    }
-
-    def countCardPoint(skillPoint: Int, cardAmount: Int): Int = {
-        cardAmount - (skillPoint / 2)
-    }
-
-    def enoughGoodCard(skillPoint: Int, cardAmount: Int): Boolean = {
-        cardAmount >= skillPoint / 2
+    def debtCost(team: Team): Int = {
+        if(cost < technicalPoints(team.hand, team.bonusAmount)) 0 else cost - technicalPoints(team.hand, team.bonusAmount)
     }
 }
 
-case class Card(val id: Int, val name: String) {
-    var points = 0
-}
+case class Card(val id: Int, val name: String)
 
 class Team(val appsToRelease: Array[Application], val location: Int, val score: Int, val dailyCardPlayed: Int, val archCardsPlayed: Int) {
     var deck: ListBuffer[Card] = new ListBuffer[Card]
@@ -55,30 +47,17 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
         hand += card
     }
 
-    def appWithMostTech(): Application = {
-        appsToRelease.reduceLeft(appTechnical)
+    def bonusAmount(): Int = {
+        hand.filter(_.name == "BONUS").length
     }
 
-    def appTechnical(app1: Application, app2: Application): Application = {
-        if(handTechnicalValue(app1) > handTechnicalValue(app2)) app1 else app2
+    def appWithLeastDebt(): Application = {
+        appsToRelease.reduceLeft(appDebt)
     }
 
-    def handTechnicalValue(app: Application): Int = {
-        hand.filter(_.name == "BONUS").length + (countCardAmountForApp(app) * 2)
+    def appDebt(app1: Application, app2: Application): Application = {
+        if(app1.debtCost(this) < app2.debtCost(this) ) app1 else app2
     }
-
-    def countCardAmountForApp(app: Application): Int = {
-        var count = 0
-        for(skill <- app.skillsRequirement) {
-            if(app.numberOfCardsForSkill(skill) <= hand.filter(_.name == skill).length) {
-                count += app.numberOfCardsForSkill(skill)
-            } else {
-                count += hand.filter(_.name == skill).length
-            }
-        }
-        count
-    }
-
 }
 
 object CardType extends Enumeration {
@@ -127,7 +106,7 @@ object GamePhase {
     }
 
     def release(team: Team): Unit = {
-        println("RELEASE " + team.appWithMostTech.id)
+        println("RELEASE " + team.appWithLeastDebt.id)
     }
 
     def giveCard(): Unit = {
