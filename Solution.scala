@@ -41,9 +41,54 @@ case class Card(val id: Int, val name: String) {
 
 class Team(val appToRelease: Array[Application], val location: Int, val score: Int, val dailyCardPlayed: Int, val archCardsPlayed: Int) {
     var deck: ListBuffer[Card] = new ListBuffer[Card]
+    var hand: ListBuffer[Card] = new ListBuffer[Card]
 
     def addToDeck(card: Card): Unit = {
         deck += card
+    }
+
+    def addToHand(card: Card): Unit = {
+        hand += card
+    }
+}
+
+object CardType extends Enumeration {
+    type CardType = Value
+    val TRAINING                = Value(0, "TRAINING")
+    val CODING                  = Value(1, "CODING")
+    val DAILY_ROUTINE           = Value(2, "DAILY_ROUTINE")
+    val TASK_PRIORITIZATION     = Value(3, "TASK_PRIORITIZATION")
+    val ARCHITECTURE_STUDY      = Value(4, "ARCHITECTURE_STUDY")
+    val CONTINUOUS_INTEGRATION  = Value(5, "CONTINUOUS_INTEGRATION")
+    val CODE_REVIEW             = Value(6, "CODE_REVIEW")
+    val REFACTORING             = Value(7, "REFACTORING")
+    val BONUS                   = Value(8, "BONUS")
+    val TECHNICAL_DEBT          = Value(9, "TECHNICAL_DEBT")
+}
+
+object Filler {
+    def addToDeck(card: Card, numberOfCards: Int, team: Team): Unit = {
+        for(i <- 0 until numberOfCards) {
+            team.addToDeck(card)
+        }
+    }
+
+    def addToHand(card: Card, numberOfCards: Int, team: Team): Unit = {
+        for(i <- 0 until numberOfCards) {
+            team.addToHand(card)
+        }
+    }
+
+    def fillDeck(cards: Array[Int], team: Team): Unit ={
+        for(i <- 0 until cards.length) {
+            if(cards(i) != 0) addToDeck(Card(i, CardType(i).toString), cards(i), team)
+        }
+    }
+    
+    def fillHand(cards: Array[Int], team: Team): Unit ={
+        for(i <- 0 until cards.length) {
+            if(cards(i) != 0) addToHand(Card(i, CardType(i).toString), cards(i), team)
+        }
     }
 }
 
@@ -108,17 +153,18 @@ object Player extends App {
         val cardLocationsCount = readLine.toInt
         for(i <- 0 until cardLocationsCount) {
             // cardsLocation: the location of the card list. It can be HAND, DRAW, DISCARD or OPPONENT_CARDS (AUTOMATED and OPPONENT_AUTOMATED will appear in later leagues)
-            val Array(cardsLocation, _trainingCardsCount, _codingCardsCount, _dailyRoutineCardsCount, _taskPrioritizationCardsCount, _architectureStudyCardsCount, _continuousDeliveryCardsCount, _codeReviewCardsCount, _refactoringCardsCount, _bonusCardsCount, _technicalDebtCardsCount) = readLine split " "
-            val trainingCardsCount = _trainingCardsCount.toInt
-            val codingCardsCount = _codingCardsCount.toInt
-            val dailyRoutineCardsCount = _dailyRoutineCardsCount.toInt
-            val taskPrioritizationCardsCount = _taskPrioritizationCardsCount.toInt
-            val architectureStudyCardsCount = _architectureStudyCardsCount.toInt
-            val continuousDeliveryCardsCount = _continuousDeliveryCardsCount.toInt
-            val codeReviewCardsCount = _codeReviewCardsCount.toInt
-            val refactoringCardsCount = _refactoringCardsCount.toInt
-            val bonusCardsCount = _bonusCardsCount.toInt
-            val technicalDebtCardsCount = _technicalDebtCardsCount.toInt
+            val cardDetails: Array[String] = readLine split " "
+            
+            cardDetails(0) match {
+                case "HAND" => {
+                    Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
+                    Filler.fillHand( cardDetails.tail.map(_.toInt), myTeam)
+                }
+                case "DRAW" => Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
+                case "DISCARD" => Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
+                case "OPPONENT_CARDS" =>  Filler.fillDeck( cardDetails.tail.map(_.toInt), ennemyTeam)
+                case _ => 
+            }
         }
 
         // --- MOVES --- //
