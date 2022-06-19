@@ -39,14 +39,6 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     var deck: ListBuffer[Card] = new ListBuffer[Card]
     var hand: ListBuffer[Card] = new ListBuffer[Card]
 
-    def addToDeck(card: Card): Unit = {
-        deck += card
-    }
-
-    def addToHand(card: Card): Unit = {
-        hand += card
-    }
-
     def bonusAmount(): Int = {
         hand.filter(_.name == "BONUS").length
     }
@@ -77,13 +69,13 @@ object CardType extends Enumeration {
 object Filler {
     def addToDeck(card: Card, numberOfCards: Int, team: Team): Unit = {
         for(i <- 0 until numberOfCards) {
-            team.addToDeck(card)
+            team.deck += card
         }
     }
 
     def addToHand(card: Card, numberOfCards: Int, team: Team): Unit = {
         for(i <- 0 until numberOfCards) {
-            team.addToHand(card)
+            team.hand += card
         }
     }
 
