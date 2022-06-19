@@ -5,9 +5,39 @@ import scala.collection.mutable._
 
 case class Skill(val id: Int, val name: String, val amountNeeded: Int)
 
-class Application(val id: Int, val skillsNeeds: Array[Skill])
+class Application(val id: Int, val skillsNeeds: Array[Skill]) {
+    def cost(): Int = {
+        skillsNeeds.map(_.amountNeeded).sum
+    }
 
-case class Card(val id: Int, val name: String)
+    // def canRelease(team: Team): Boolean = {
+    //     cost <= team.handValue
+    // }
+
+    def debtIfRelease(teamHand: ArrayBuffer[Card]): Int = {
+        for(skill <- skillsNeeds) {
+            if(enoughGoodCard(skill.amountNeeded, teamHand.filter(_.name == skill.name).length)) 
+            teamHand.filter(_.name == skill.name).foreach(_.points += 2)
+        }
+        if(canReleaseWithoutDebt(teamHand, teamHand.filter(_.name == "BONUS").length)) 0 else cost - teamHand.map(_.points).sum    
+    }
+
+    def canReleaseWithoutDebt(teamHand: ArrayBuffer[Card], teamBonusAmount: Int): Boolean = {
+        cost > teamHand.filter(_.name != "BONUS").filter(_.name != "TECHNICAL_DEBT").map(_.points).sum + teamBonusAmount
+    }
+
+    def countCardPoint(skillPoint: Int, cardAmount: Int): Int = {
+        cardAmount - (skillPoint / 2)
+    }
+
+    def enoughGoodCard(skillPoint: Int, cardAmount: Int): Boolean = {
+        cardAmount >= skillPoint / 2
+    }
+}
+
+case class Card(val id: Int, val name: String) {
+    var points = 0
+}
 
 class Team(val appToRelease: Array[Application], val location: Int, val score: Int, val dailyCardPlayed: Int, val archCardsPlayed: Int) {
     var deck: ListBuffer[Card] = new ListBuffer[Card]
@@ -106,11 +136,19 @@ object Player extends App {
             case _              => 
         }
         
+<<<<<<< HEAD
 
         // Write an action using println
         // To debug: Console.err.println("Debug messages...")
         
 
+=======
+
+        // Write an action using println
+        // To debug: Console.err.println("Debug messages...")
+        
+
+>>>>>>> 961c49d25d414368b3bda3c39fd944cc4e817480
         // In the first league: RANDOM | MOVE <zoneId> | RELEASE <applicationId> | WAIT; In later leagues: | GIVE <cardType> | THROW <cardType> | TRAINING | CODING | DAILY_ROUTINE | TASK_PRIORITIZATION <cardTypeToThrow> <cardTypeToTake> | ARCHITECTURE_STUDY | CONTINUOUS_DELIVERY <cardTypeToAutomate> | CODE_REVIEW | REFACTORING;
     }
 }
