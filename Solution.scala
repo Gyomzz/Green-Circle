@@ -136,19 +136,11 @@ object Player extends App {
             case _              => 
         }
         
-<<<<<<< HEAD
 
         // Write an action using println
         // To debug: Console.err.println("Debug messages...")
         
 
-=======
-
-        // Write an action using println
-        // To debug: Console.err.println("Debug messages...")
-        
-
->>>>>>> 961c49d25d414368b3bda3c39fd944cc4e817480
         // In the first league: RANDOM | MOVE <zoneId> | RELEASE <applicationId> | WAIT; In later leagues: | GIVE <cardType> | THROW <cardType> | TRAINING | CODING | DAILY_ROUTINE | TASK_PRIORITIZATION <cardTypeToThrow> <cardTypeToTake> | ARCHITECTURE_STUDY | CONTINUOUS_DELIVERY <cardTypeToAutomate> | CODE_REVIEW | REFACTORING;
     }
 }
