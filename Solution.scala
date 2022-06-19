@@ -172,8 +172,7 @@ object Player extends App {
         for(i <- 0 until possibleMovesCount) {
             val possibleMove = readLine
         }
-        myTeam.hand.foreach(Console.err.println)
-
+        
         gamePhase match {
             case "MOVE"         => println("RANDOM")
             case "RELEASE"      => println("RANDOM")
