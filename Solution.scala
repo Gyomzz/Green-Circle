@@ -10,9 +10,13 @@ class Application(val id: Int, val skillsNeeds: Array[Skill]) {
         skillsNeeds.map(_.amountNeeded).sum
     }
 
-    // def canRelease(team: Team): Boolean = {
-    //     cost <= team.handValue
-    // }
+    def numberOfCardsForSkill(skillName: String): Int = {
+        skillsNeeds.filter(_.name == skillName).map(_.amountNeeded).sum / 2
+    }
+
+    def skillsRequirement(): Array[String] = {
+        skillsNeeds.filter(_.amountNeeded != 0).map(_.name )
+    }
 
     def debtIfRelease(teamHand: ArrayBuffer[Card]): Int = {
         for(skill <- skillsNeeds) {
@@ -39,7 +43,7 @@ case class Card(val id: Int, val name: String) {
     var points = 0
 }
 
-class Team(val appToRelease: Array[Application], val location: Int, val score: Int, val dailyCardPlayed: Int, val archCardsPlayed: Int) {
+class Team(val appsToRelease: Array[Application], val location: Int, val score: Int, val dailyCardPlayed: Int, val archCardsPlayed: Int) {
     var deck: ListBuffer[Card] = new ListBuffer[Card]
     var hand: ListBuffer[Card] = new ListBuffer[Card]
 
@@ -50,6 +54,31 @@ class Team(val appToRelease: Array[Application], val location: Int, val score: I
     def addToHand(card: Card): Unit = {
         hand += card
     }
+
+    def appWithMostTech(): Application = {
+        appsToRelease.reduceLeft(appTechnical)
+    }
+
+    def appTechnical(app1: Application, app2: Application): Application = {
+        if(handTechnicalValue(app1) > handTechnicalValue(app2)) app1 else app2
+    }
+
+    def handTechnicalValue(app: Application): Int = {
+        hand.filter(_.name == "BONUS").length + (countCardAmountForApp(app) * 2)
+    }
+
+    def countCardAmountForApp(app: Application): Int = {
+        var count = 0
+        for(skill <- app.skillsRequirement) {
+            if(app.numberOfCardsForSkill(skill) <= hand.filter(_.name == skill).length) {
+                count += app.numberOfCardsForSkill(skill)
+            } else {
+                count += hand.filter(_.name == skill).length
+            }
+        }
+        count
+    }
+
 }
 
 object CardType extends Enumeration {
@@ -89,6 +118,28 @@ object Filler {
         for(i <- 0 until cards.length) {
             if(cards(i) != 0) addToHand(Card(i, CardType(i).toString), cards(i), team)
         }
+    }
+}
+
+object GamePhase {
+    def move(): Unit = {
+        println("RANDOM")
+    }
+
+    def release(team: Team): Unit = {
+        println("RELEASE " + team.appWithMostTech.id)
+    }
+
+    def giveCard(): Unit = {
+        println("RANDOM")
+    }
+
+    def throwCard(): Unit = {
+        println("RANDOM")
+    }
+
+    def playCard(): Unit = {
+        println("WAIT")
     }
 }
 
@@ -172,13 +223,13 @@ object Player extends App {
         for(i <- 0 until possibleMovesCount) {
             val possibleMove = readLine
         }
-        
+
         gamePhase match {
-            case "MOVE"         => println("RANDOM")
-            case "RELEASE"      => println("RANDOM")
-            case "GIVE_CARD"    => println("RANDOM")
-            case "THROW_CARD"   => println("RANDOM")
-            case "PLAY_CARD"    => println("RANDOM")
+            case "MOVE"         => GamePhase.move
+            case "RELEASE"      => GamePhase.release(myTeam)
+            case "GIVE_CARD"    => GamePhase.giveCard
+            case "THROW_CARD"   => GamePhase.throwCard
+            case "PLAY_CARD"    => GamePhase.playCard
             case _              => 
         }
         
