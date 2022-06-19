@@ -144,7 +144,7 @@ object Player extends App {
             // playerPermanentDailyRoutineCards: number of DAILY_ROUTINE the player has played. It allows them to take cards from the adjacent zones
             // playerPermanentArchitectureStudyCards: number of ARCHITECTURE_STUDY the player has played. It allows them to draw more cards
             val Array(playerLocation, playerScore, playerPermanentDailyRoutineCards, playerPermanentArchitectureStudyCards) = (readLine split " ").filter(_ != "").map (_.toInt)
-            companies(i) = new Team(applications, playerLocation, playerScore, playerPermanentDailyRoutineCards, playerPermanentArchitectureStudyCards)
+            companies(i) = new Team(applications.sortWith(_.cost < _.cost), playerLocation, playerScore, playerPermanentDailyRoutineCards, playerPermanentArchitectureStudyCards)
         }
         val myTeam = companies(0)
         val ennemyTeam = companies(1)
@@ -172,6 +172,7 @@ object Player extends App {
         for(i <- 0 until possibleMovesCount) {
             val possibleMove = readLine
         }
+        myTeam.hand.foreach(Console.err.println)
 
         gamePhase match {
             case "MOVE"         => println("RANDOM")
