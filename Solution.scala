@@ -11,14 +11,6 @@ class Application(val id: Int, val skillsNeeds: Array[Skill]) {
         skillsNeeds.map(_.amountNeeded).sum
     }
 
-    def numberOfCardsForSkill(skillName: String): Int = {
-        skillsNeeds.filter(_.name == skillName).map(_.amountNeeded).sum / 2
-    }
-
-    def skillsRequirement(): Array[String] = {
-        skillsNeeds.filter(_.amountNeeded != 0).map(_.name )
-    }
-
     def technicalPoints(teamHand: ListBuffer[Card], teamBonusAmount: Int): Int = {
         var tech = 0
         for(skill <- skillsNeeds) {
