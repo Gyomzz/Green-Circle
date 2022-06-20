@@ -48,6 +48,10 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     def appDebt(app1: Application, app2: Application): Application = {
         if(app1.debtCost(this) < app2.debtCost(this) ) app1 else app2
     }
+
+    def adjustToEnnemyScore(ennemyScore: Int): Unit = {
+        acceptableDebt += Math.abs(score - (ennemyScore + 1)) 
+    }
     
     def shouldRelease(app: Application): Boolean = {
         if(almostFinish) acceptableDebt = 0
@@ -326,8 +330,9 @@ object Player extends App {
             companies(i) = new Team(applications.sortWith(_.cost < _.cost), playerLocation, playerScore, playerPermanentDailyRoutineCards, playerPermanentArchitectureStudyCards)
         }
         val myTeam = companies(0)
-        val ennemyTeam = companies(1)        
-
+        val ennemyTeam = companies(1)  
+        if(ennemyTeam.score > myTeam.score) myTeam.adjustToEnnemyScore(ennemyTeam.score)   
+        
         // --- CARDS --- //
         val cardLocationsCount = readLine.toInt
         for(i <- 0 until cardLocationsCount) {
