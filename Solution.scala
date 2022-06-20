@@ -42,20 +42,25 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     def appDebt(app1: Application, app2: Application): Application = {
         if(app1.debtCost(this) < app2.debtCost(this) ) app1 else app2
     }
+    
+    def shouldRelease(app: Application): Boolean = {
+        app.debtCost(this) <= 3
+    }
 }
 
-object CardType extends Enumeration {
-    type CardType = Value
-    val TRAINING                = Value(0, "TRAINING")
-    val CODING                  = Value(1, "CODING")
-    val DAILY_ROUTINE           = Value(2, "DAILY_ROUTINE")
-    val TASK_PRIORITIZATION     = Value(3, "TASK_PRIORITIZATION")
-    val ARCHITECTURE_STUDY      = Value(4, "ARCHITECTURE_STUDY")
-    val CONTINUOUS_INTEGRATION  = Value(5, "CONTINUOUS_INTEGRATION")
-    val CODE_REVIEW             = Value(6, "CODE_REVIEW")
-    val REFACTORING             = Value(7, "REFACTORING")
-    val BONUS                   = Value(8, "BONUS")
-    val TECHNICAL_DEBT          = Value(9, "TECHNICAL_DEBT")
+object CardType {
+    val list = List(
+        Card(0, "TRAINING"),
+        Card(1, "CODING"),
+        Card(2, "DAILY_ROUTINE"),
+        Card(3, "TASK_PRIORITIZATION"),
+        Card(4, "ARCHITECTURE_STUDY"),
+        Card(5, "CONTINUOUS_INTEGRATION"),
+        Card(6, "CODE_REVIEW"),
+        Card(7, "REFACTORING"),
+        Card(8, "BONUS"),
+        Card(9, "TECHNICAL_DEBT")
+    )
 }
 
 object Filler {
@@ -73,36 +78,14 @@ object Filler {
 
     def fillDeck(cards: Array[Int], team: Team): Unit ={
         for(i <- 0 until cards.length) {
-            if(cards(i) != 0) addToDeck(Card(i, CardType(i).toString), cards(i), team)
+            if(cards(i) != 0) addToDeck(Card(i, CardType.list(i).name), cards(i), team)
         }
     }
     
     def fillHand(cards: Array[Int], team: Team): Unit ={
         for(i <- 0 until cards.length) {
-            if(cards(i) != 0) addToHand(Card(i, CardType(i).toString), cards(i), team)
+            if(cards(i) != 0) addToHand(Card(i, CardType.list(i).name), cards(i), team)
         }
-    }
-}
-
-object GamePhase {
-    def move(): Unit = {
-        println("RANDOM")
-    }
-
-    def release(team: Team): Unit = {
-        println("RELEASE " + team.appWithLeastDebt.id)
-    }
-
-    def giveCard(): Unit = {
-        println("RANDOM")
-    }
-
-    def throwCard(): Unit = {
-        println("RANDOM")
-    }
-
-    def playCard(): Unit = {
-        println("WAIT")
     }
 }
 
@@ -133,8 +116,51 @@ object Needs {
         list.foreach(_.amount = 0)
     }
 
-    def listSorted(): List[Need] => {
+    def mostWanted(): List[Need] = {
         list.sortWith(_.amount > _.amount)
+    }
+
+    def leastWanted(): List[Need] = {
+        list.sortWith(_.amount < _.amount)
+    }
+}
+
+object Choices {
+    def leastNeedCard(team: Team, leastNeededCards: List[Need]): Card = {
+        if(team.bonusAmount != 0) getCardByName("BONUS") else
+        getCardByName(team.hand.map(_.name)
+            .filter(leastNeededCards.map(_.name).contains(_))
+            .head
+        )
+    }
+
+    def getCardByName(cardName: String): Card = {
+        CardType.list.filter(_.name == cardName).head
+    }
+}
+
+object GamePhase {
+    def move(move: String): Unit = {
+        println(move)
+    }
+
+    def release(team: Team): Unit = {
+        if(team.shouldRelease(team.appWithLeastDebt)) println("RELEASE " + team.appWithLeastDebt.id)
+        else println("WAIT")
+    }
+
+    def giveCard(team: Team): Unit = {
+        Console.err.println("giving : " + Choices.leastNeedCard(team, Needs.leastWanted).name)
+        println("GIVE " + Choices.leastNeedCard(team, Needs.leastWanted).id)
+    }
+
+    def throwCard(team: Team): Unit = {
+        Console.err.println("trhowing : " + Choices.leastNeedCard(team, Needs.leastWanted).name)
+        println("THROW " + Choices.leastNeedCard(team, Needs.leastWanted).id)
+    }
+
+    def playCard(): Unit = {
+        println("WAIT")
     }
 }
 
@@ -218,15 +244,17 @@ object Player extends App {
 
         // --- MOVES --- //
         val possibleMovesCount = readLine.toInt
+        val moves = new Array[String](possibleMovesCount)
         for(i <- 0 until possibleMovesCount) {
             val possibleMove = readLine
+            moves(i) = possibleMove
         }
 
         gamePhase match {
-            case "MOVE"         => GamePhase.move
+            case "MOVE"         => GamePhase.move(moves.head)
             case "RELEASE"      => GamePhase.release(myTeam)
-            case "GIVE_CARD"    => GamePhase.giveCard
-            case "THROW_CARD"   => GamePhase.throwCard
+            case "GIVE_CARD"    => GamePhase.giveCard(myTeam)
+            case "THROW_CARD"   => GamePhase.throwCard(myTeam)
             case "PLAY_CARD"    => GamePhase.playCard
             case _              => 
         }
