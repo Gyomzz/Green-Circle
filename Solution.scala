@@ -106,6 +106,38 @@ object GamePhase {
     }
 }
 
+case class Need(val name: String, var amount: Int)
+
+object Needs {
+    val list: List[Need] = List(
+        Need("TRAINING", 0),
+        Need("CODING", 0),
+        Need("DAILY_ROUTINE", 0),
+        Need("TASK_PRIORITIZATION", 0),
+        Need("ARCHITECTURE_STUDY", 0),
+        Need("CONTINUOUS_INTEGRATION", 0),
+        Need("CODE_REVIEW", 0),
+        Need("REFACTORING", 0)
+    )
+
+    def update(app: Application): Unit = {
+        for(skill <- app.skillsNeeds) {
+            list.find(_.name == skill.name) match {
+                case Some(need) => need.amount += skill.amountNeeded
+                case _ =>
+            }
+        }
+    }
+
+    def resetNeed(): Unit = {
+        list.foreach(_.amount = 0)
+    }
+
+    def listSorted(): List[Need] => {
+        list.sortWith(_.amount > _.amount)
+    }
+}
+
 /**
  * Complete the hackathon before your opponent by following the principles of Green IT
  **/
@@ -150,6 +182,9 @@ object Player extends App {
                 )
             )
         }
+
+        Needs.resetNeed
+        applications.foreach(Needs.update)
 
         // --- PLAYER --- //
         val companies = new Array[Team](2)
