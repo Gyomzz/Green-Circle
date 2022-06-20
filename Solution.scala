@@ -31,7 +31,7 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     var deck: ListBuffer[Card] = new ListBuffer[Card]
     var hand: ListBuffer[Card] = new ListBuffer[Card]
     var draw: ListBuffer[Card] = new ListBuffer[Card]
-    var acceptableDebt = 1
+    var acceptableDebt = 3
 
     def bonusAmount(): Int = {
         hand.filter(_.name == "BONUS").length
@@ -50,7 +50,10 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     }
 
     def adjustToEnnemyScore(ennemyScore: Int): Unit = {
-        acceptableDebt += Math.abs(score - (ennemyScore + 1)) 
+        if(ennemyScore > score)
+            acceptableDebt += Math.abs(score - (ennemyScore + 1)) 
+        else
+            acceptableDebt -= Math.abs(score - (ennemyScore + 1)) 
     }
     
     def shouldRelease(app: Application): Boolean = {
@@ -331,8 +334,9 @@ object Player extends App {
         }
         val myTeam = companies(0)
         val ennemyTeam = companies(1)  
-        if(ennemyTeam.score > myTeam.score) myTeam.adjustToEnnemyScore(ennemyTeam.score)   
-        
+        myTeam.adjustToEnnemyScore(ennemyTeam.score)   
+        Console.err.println("acceptable debt: " + myTeam.acceptableDebt)   
+
         // --- CARDS --- //
         val cardLocationsCount = readLine.toInt
         for(i <- 0 until cardLocationsCount) {
