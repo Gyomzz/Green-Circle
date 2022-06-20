@@ -3,7 +3,7 @@ import scala.util._
 import scala.io.StdIn._
 import scala.collection.mutable._
 
-case class Skill(val id: Int, val name: String, val amountNeeded: Int)
+case class Skill(val name: String, val amountNeeded: Int)
 
 class Application(val id: Int, val skillsNeeds: Array[Skill]) {
 
@@ -172,20 +172,21 @@ object Choices {
         cardToPlay
     }
 
-    def playBestCard(team: Team, mostWantedCard: List[Need]): Unit = {
+    def playBestCard(team: Team, mostWantedCard: List[String]): Unit = {
         if(team.hand.map(_.name).filter(cardsValue(team).contains(_)).length != 0) {
             Console.err.println("playing : " + team.hand.map(_.name).filter(cardsValue(team).contains(_)).head)
             if(team.hand.map(_.name).filter(cardsValue(team).contains(_)).head == "CONTINUOUS_INTEGRATION") {
-                println("CONTINUOUS_INTEGRATION " + mostNeedCard(team, mostWantedCard).id)
+                println("CONTINUOUS_INTEGRATION " + 
+                mostNeedCard(team, mostWantedCard.filter(_ !="CONTINUOUS_INTEGRATION")).id)
             } 
             else println(team.hand.map(_.name).filter(cardsValue(team).contains(_)).head)
         }
         else println("WAIT")
     }
 
-    def mostNeedCard(team: Team, mostNeedCards: List[Need]): Card = {
+    def mostNeedCard(team: Team, mostNeedCards: List[String]): Card = {
         getCardByName(team.hand.map(_.name)
-            .filter(mostNeedCards.map(_.name).contains(_))
+            .filter(mostNeedCards.contains(_))
             .head
         )
     }
@@ -224,7 +225,7 @@ object GamePhase {
     }
 
     def playCard(team: Team): Unit = {
-        Choices.playBestCard(team, Needs.mostWanted)
+        Choices.playBestCard(team, Needs.mostWanted.map(_.name))
     }
 }
 
@@ -236,6 +237,9 @@ object Player extends App {
     // game loop
     while(true) {
         val gamePhase = readLine // can be MOVE, GIVE_CARD, THROW_CARD, PLAY_CARD or RELEASE
+        
+        // reset Total need cost
+        Needs.resetNeed
 
         // --- APPLICATIONS --- //
         val applicationsCount = readLine.toInt
@@ -261,19 +265,19 @@ object Player extends App {
             val refactoringNeeded = _refactoringNeeded.toInt
 
             applications(i) = new Application(id, Array(
-                Skill(0, "TRAINING", trainingNeeded.toInt),
-                Skill(1, "CODING", codingNeeded.toInt),
-                Skill(2, "DAILY_ROUTINE", dailyRoutineNeeded.toInt),
-                Skill(3, "TASK_PRIORITIZATION", taskPrioritizationNeeded.toInt),
-                Skill(4, "ARCHITECTURE_STUDY", architectureStudyNeeded.toInt),
-                Skill(5, "CONTINUOUS_INTEGRATION", continuousDeliveryNeeded.toInt),
-                Skill(6, "CODE_REVIEW", codeReviewNeeded.toInt),
-                Skill(7, "REFACTORING", refactoringNeeded.toInt)
+                Skill("TRAINING", trainingNeeded.toInt),
+                Skill("CODING", codingNeeded.toInt),
+                Skill("DAILY_ROUTINE", dailyRoutineNeeded.toInt),
+                Skill("TASK_PRIORITIZATION", taskPrioritizationNeeded.toInt),
+                Skill("ARCHITECTURE_STUDY", architectureStudyNeeded.toInt),
+                Skill("CONTINUOUS_INTEGRATION", continuousDeliveryNeeded.toInt),
+                Skill("CODE_REVIEW", codeReviewNeeded.toInt),
+                Skill("REFACTORING", refactoringNeeded.toInt)
                 )
             )
         }
 
-        Needs.resetNeed
+        // update total cost need
         applications.foreach(Needs.update)
 
         // --- PLAYER --- //
