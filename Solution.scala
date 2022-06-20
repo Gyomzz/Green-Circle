@@ -30,6 +30,9 @@ case class Card(val id: Int, val name: String)
 class Team(val appsToRelease: Array[Application], val location: Int, val score: Int, val dailyCardPlayed: Int, val archCardsPlayed: Int) {
     var deck: ListBuffer[Card] = new ListBuffer[Card]
     var hand: ListBuffer[Card] = new ListBuffer[Card]
+    var draw: ListBuffer[Card] = new ListBuffer[Card]
+
+    var acceptableDebt = 3
 
     def bonusAmount(): Int = {
         hand.filter(_.name == "BONUS").length
@@ -44,7 +47,28 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     }
     
     def shouldRelease(app: Application): Boolean = {
-        app.debtCost(this) <= 3
+        if(almostFinish) acceptableDebt = 0
+        app.debtCost(this) <= acceptableDebt
+    }
+
+    def almostFinish(): Boolean = {
+        score == 4
+    }
+
+    def haveDebtInHand(): Boolean = {
+        hand.filter(_.name == "TECHNICAL_DEBT").length > 0
+    }
+
+    def drawOnlyDebt(): Boolean = {
+        draw.filter(_.name == "TECHNICAL_DEBT").length == draw.length
+    }
+
+    def shouldDraw(): Boolean = {
+        !drawOnlyDebt && canDraw || drawOnlyDebt && hand.filter(_.name == "REFACTORING").length != 0
+    }
+
+    def canDraw(): Boolean = {
+        draw.length > 2 
     }
 }
 
@@ -76,9 +100,21 @@ object Filler {
         }
     }
 
+    def addToDraw(card: Card, numberOfCards: Int, team: Team): Unit = {
+        for(i <- 0 until numberOfCards) {
+            team.draw += card
+        }
+    }
+
     def fillDeck(cards: Array[Int], team: Team): Unit ={
         for(i <- 0 until cards.length) {
             if(cards(i) != 0) addToDeck(Card(i, CardType.list(i).name), cards(i), team)
+        }
+    }
+
+    def fillDraw(cards: Array[Int], team: Team): Unit ={
+        for(i <- 0 until cards.length) {
+            if(cards(i) != 0) addToDraw(Card(i, CardType.list(i).name), cards(i), team)
         }
     }
     
@@ -126,6 +162,34 @@ object Needs {
 }
 
 object Choices {
+    val cardPriority = List("CONTINUOUS_INTEGRATION", "CODING", "TRAINING", "REFACTORING", "DAILY_ROUTINE", "ARCHITECTURE_STUDY")
+
+    def cardsValue(team: Team): List[String] = {
+        var cardToPlay = cardPriority
+        if(!team.almostFinish) cardToPlay = cardToPlay.filter(_ != "CONTINUOUS_INTEGRATION")
+        if(!team.haveDebtInHand) cardToPlay = cardToPlay.filter(_ != "REFACTORING")
+        if(!team.shouldDraw) cardToPlay = cardToPlay.filter(_ != "TRAINING").filter(_ !="CODING")
+        cardToPlay
+    }
+
+    def playBestCard(team: Team, mostWantedCard: List[Need]): Unit = {
+        if(team.hand.map(_.name).filter(cardsValue(team).contains(_)).length != 0) {
+            Console.err.println("playing : " + team.hand.map(_.name).filter(cardsValue(team).contains(_)).head)
+            if(team.hand.map(_.name).filter(cardsValue(team).contains(_)).head == "CONTINUOUS_INTEGRATION") {
+                println("CONTINUOUS_INTEGRATION " + mostNeedCard(team, mostWantedCard).id)
+            } 
+            else println(team.hand.map(_.name).filter(cardsValue(team).contains(_)).head)
+        }
+        else println("WAIT")
+    }
+
+    def mostNeedCard(team: Team, mostNeedCards: List[Need]): Card = {
+        getCardByName(team.hand.map(_.name)
+            .filter(mostNeedCards.map(_.name).contains(_))
+            .head
+        )
+    }
+
     def leastNeedCard(team: Team, leastNeededCards: List[Need]): Card = {
         if(team.bonusAmount != 0) getCardByName("BONUS") else
         getCardByName(team.hand.map(_.name)
@@ -159,8 +223,8 @@ object GamePhase {
         println("THROW " + Choices.leastNeedCard(team, Needs.leastWanted).id)
     }
 
-    def playCard(): Unit = {
-        println("WAIT")
+    def playCard(team: Team): Unit = {
+        Choices.playBestCard(team, Needs.mostWanted)
     }
 }
 
@@ -235,7 +299,10 @@ object Player extends App {
                     Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
                     Filler.fillHand( cardDetails.tail.map(_.toInt), myTeam)
                 }
-                case "DRAW" => Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
+                case "DRAW" => {
+                    Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
+                    Filler.fillDraw( cardDetails.tail.map(_.toInt), myTeam)
+                }
                 case "DISCARD" => Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
                 case "OPPONENT_CARDS" =>  Filler.fillDeck( cardDetails.tail.map(_.toInt), ennemyTeam)
                 case _ => 
@@ -255,7 +322,7 @@ object Player extends App {
             case "RELEASE"      => GamePhase.release(myTeam)
             case "GIVE_CARD"    => GamePhase.giveCard(myTeam)
             case "THROW_CARD"   => GamePhase.throwCard(myTeam)
-            case "PLAY_CARD"    => GamePhase.playCard
+            case "PLAY_CARD"    => GamePhase.playCard(myTeam)
             case _              => 
         }
         
