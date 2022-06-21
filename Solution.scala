@@ -11,17 +11,27 @@ class Application(val id: Int, val skillsNeeds: Array[Skill]) {
         skillsNeeds.map(_.amountNeeded).sum
     }
 
-    def technicalPoints(teamHand: ListBuffer[Card], teamBonusAmount: Int): Int = {
+    def technicalPoints(team: Team): Int = {
         var tech = 0
         for(skill <- skillsNeeds) {
-            tech += (teamHand.filter(_.name == skill.name).take(skill.amountNeeded / 2).length * 2)  
+            tech += (team.hand.filter(_.name == skill.name).take(skill.amountNeeded / 2).length * 2)  
+            tech += (team.automateds.filter(_.name == skill.name).take(skill.amountNeeded / 2).length * 2)  
         }
-        tech += teamBonusAmount
+        tech += team.bonusAmount
         tech
     }
 
     def debtCost(team: Team): Int = {
-        if(cost < technicalPoints(team.hand, team.bonusAmount)) 0 else cost - technicalPoints(team.hand, team.bonusAmount)
+        if(cost < technicalPoints(team)) 0 else cost - technicalPoints(team)
+    }
+
+    def findLastMissingCard(team: Team): Card = {
+        var cardMissing = Card(9, CardType.list(9).name)
+        for(skill <- skillsNeeds) {
+            if(team.hand.filter(_.name == skill.name).length + team.automateds.filter(_.name == skill.name).length != skill.amountNeeded / 2)
+            cardMissing = Card(skill.id, skill.name)
+        }
+        cardMissing
     }
 }
 
@@ -31,9 +41,14 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     var deck: ListBuffer[Card] = new ListBuffer[Card]
     var hand: ListBuffer[Card] = new ListBuffer[Card]
     var draw: ListBuffer[Card] = new ListBuffer[Card]
-    var acceptableDebt = 2
+    var automateds: ListBuffer[Card] = new ListBuffer[Card]
+    val acceptableDebt = 0
 
     def bonusAmount(): Int = {
+        hand.filter(_.name == "BONUS").length + automateds.filter(_.name == "BONUS").length
+    }
+
+    def bonusInHand(): Int = {
         hand.filter(_.name == "BONUS").length
     }
 
@@ -50,8 +65,7 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     }
     
     def shouldRelease(app: Application): Boolean = {
-        if(almostFinish) acceptableDebt = 0
-        app.debtCost(this) <= acceptableDebt
+        app.debtCost(this) - 1 <= acceptableDebt
     }
 
     def almostFinish(): Boolean = {
@@ -67,15 +81,19 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     }
 
     def shouldDraw(): Boolean = {
-        !drawOnlyDebt && canDraw || drawOnlyDebt && hand.filter(_.name == "REFACTORING").length != 0
+        !drawOnlyDebt && draw.length > 2 
     }
 
-    def canDraw(): Boolean = {
-        draw.length > 2 
+    def canReleaseWithMove(disturbLocation: List[Int]): Boolean = {
+        if(disturbLocation.contains(lastCardNeedZone) == false
+        && appWithLeastDebt.debtCost(this) + 2 == acceptableDebt
+        && lastCardNeedZone != 9 
+        && lastCardNeedZone != location) 
+        true else false
     }
 
-    def haveCI(): Boolean = {
-        hand.filter(_.name == "CONTINUOUS_INTEGRATION").length != 0
+    def lastCardNeedZone(): Int = {
+        appWithLeastDebt.findLastMissingCard(this).id
     }
 
     def haveMoreThanOneCI(): Boolean = {
@@ -85,7 +103,7 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     def canCI(): Boolean = {
         hand.filter(_.name != "TECHNICAL_DEBT")
             .filter(card => Needs.mostWanted.map(_.name).contains(card.name))
-            .length > 1
+            .length > 1 || hand.filter(_.name == "BONUS").length > 0
     }
 
     def canTaskPrio(): Boolean = {
@@ -124,6 +142,18 @@ object Filler {
     def addToDraw(card: Card, numberOfCards: Int, team: Team): Unit = {
         for(i <- 0 until numberOfCards) {
             team.draw += card
+        }
+    }
+
+    def addToAutomateds(card: Card, numberOfCards: Int, team: Team): Unit = {
+        for(i <- 0 until numberOfCards) {
+            team.automateds += card
+        }
+    }
+
+    def fillAutomateds(cards: Array[Int], team: Team): Unit ={
+        for(i <- 0 until cards.length) {
+            if(cards(i) != 0) addToAutomateds(Card(i, CardType.list(i).name), cards(i), team)
         }
     }
 
@@ -184,16 +214,14 @@ object Needs {
 }
 
 object Choices {
-    val cardPriority = List("CONTINUOUS_INTEGRATION", "REFACTORING", "TASK_PRIORITIZATION", "CODING", "ARCHITECTURE_STUDY",  "DAILY_ROUTINE", "TRAINING",  "CODE_REVIEW")
+    val cardPriority = List("ARCHITECTURE_STUDY", "CONTINUOUS_INTEGRATION", "TRAINING",  "REFACTORING", "CODE_REVIEW", "TASK_PRIORITIZATION", "DAILY_ROUTINE")
 
     def cardsValue(team: Team, ennemyTeam: Team): List[String] = {
         var cardToPlay = cardPriority
-        if(team.score >= ennemyTeam.score + 2 || team.debtAmount == 0) 
-        cardToPlay = cardToPlay.filter(_ != "REFACTORING")
-        if(!team.shouldDraw) cardToPlay = cardToPlay.filter(_ != "CODING")
-        if(!team.haveCI || !team.canCI) cardToPlay = cardToPlay.filter(_ != "CONTINUOUS_INTEGRATION")
-        if(!team.canTaskPrio || team.score != 4) cardToPlay = cardToPlay.filter(_ != "TASK_PRIORITIZATION")
+        if(team.debtAmount < 6) cardToPlay = cardToPlay.filter(_ != "REFACTORING")
         if(!team.shouldDraw) cardToPlay = cardToPlay.filter(_ != "TRAINING")
+        if(!team.canCI) cardToPlay = cardToPlay.filter(_ != "CONTINUOUS_INTEGRATION")
+        if(!team.canTaskPrio) cardToPlay = cardToPlay.filter(_ != "TASK_PRIORITIZATION")
         cardToPlay
     }
 
@@ -202,7 +230,7 @@ object Choices {
         else if(team.hand.map(_.name).filter(cardsValue(team, ennemyTeam).contains(_)).length != 0) {
             team.hand.map(_.name).filter(cardsValue(team, ennemyTeam).contains(_)).head match {
                 case "CONTINUOUS_INTEGRATION" => {
-                    if(team.bonusAmount != 0) println("CONTINUOUS_INTEGRATION " + 8)
+                    if(team.bonusInHand != 0) println("CONTINUOUS_INTEGRATION " + 8)
                     else if(Needs.mostWanted.filter(team.hand.contains(_)).length != 0)
                         println("CONTINUOUS_INTEGRATION " + Needs.mostWanted.filter(team.hand.contains(_)).head.typeId)
                     else {
@@ -233,34 +261,41 @@ object Choices {
     }
 
     def findBestZone(team: Team, disturbLocation: List[Int]): Int = {
-        closestSpot(team.location, List(1, 2, 3, 4, 5, 7).filter(!disturbLocation.contains(_)))
+        if(team.dailyCardsPlayed == 0) {
+            if(disturbLocation.contains(5)) closestSpot(team.location, List(2, 4, 5, 6, 7).filter(_ != team.location))
+            else closestSpot(team.location, List(5, 6, 7).filter(_ != team.location))
+        }
+        else {
+            if(disturbLocation.contains(5)) closestSpot(team.location, List(0, 4, 5, 6, 7).filter(_ != team.location)) 
+            else closestSpot(team.location, List(0, 4, 5, 6, 7).filter(_ != team.location))
+        }
     }
 
     def closestSpot(teamLocation: Int, mostWantedZone: List[Int]): Int = {
-        if(teamLocation != 7 && mostWantedZone.filter(_ > teamLocation).length != 0) 
+        if(teamLocation != 7 && mostWantedZone.filter(_ > teamLocation).length != 0) {
+            Console.err.println("Closest Post: " + mostWantedZone.filter(_ > teamLocation).min)
             mostWantedZone.filter(_ > teamLocation).min
-        else 
+        } 
+        else {
+            Console.err.println("Closest Post: " + mostWantedZone.filter(_ < teamLocation).min)
             mostWantedZone.filter(_ < teamLocation).min
+        }
     }
 
     def daily(team: Team, disturbLocation: List[Int]): Unit = {
-        Console.err.println("Daily is ok")
-        if(Choices.findBestZone(team, disturbLocation) + team.dailyCardsPlayed == 4 && 
-        Choices.findBestZone(team, disturbLocation) != 7) 
-            println("MOVE " + Choices.findBestZone(team, disturbLocation) + " 4")
-        else if(
-            Choices.findBestZone(team, disturbLocation) + team.dailyCardsPlayed == 5 && 
-            Choices.findBestZone(team, disturbLocation) != 7 || 
-            Choices.findBestZone(team, disturbLocation) - team.dailyCardsPlayed == 5 && 
-            Choices.findBestZone(team, disturbLocation) != 7
-        ) println("MOVE " + Choices.findBestZone(team, disturbLocation) + " 5")
-        else println("MOVE " + Choices.findBestZone(team, disturbLocation))
+        Choices.findBestZone(team, disturbLocation) match {
+            case 4 => println("MOVE 4 5")
+            case 5 => println("MOVE 5 4")
+            case 7 => println("MOVE 7 0")
+            case _ => println("MOVE " + Choices.findBestZone(team, disturbLocation)) 
+        }
     }
 }
 
 object GamePhase {
     def move(team: Team, disturbLocation: List[Int]): Unit = {
-        if(team.dailyCardsPlayed != 0) {
+        if(team.canReleaseWithMove(disturbLocation)) println("MOVE " + team.lastCardNeedZone)
+        else if(team.dailyCardsPlayed != 0) {
             Choices.daily(team, disturbLocation)
         } else {
             println("MOVE " + Choices.findBestZone(team, disturbLocation))
@@ -349,7 +384,7 @@ object Player extends App {
         for(i <- 0 until cardLocationsCount) {
             // cardsLocation: the location of the card list. It can be HAND, DRAW, DISCARD or OPPONENT_CARDS (AUTOMATED and OPPONENT_AUTOMATED will appear in later leagues)
             val cardDetails: Array[String] = readLine split " "
-            
+            if(cardDetails(0) == 0) cardDetails(0).foreach(Console.err.println)
             cardDetails(0) match {
                 case "HAND" => {
                     Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
@@ -360,7 +395,9 @@ object Player extends App {
                     Filler.fillDraw( cardDetails.tail.map(_.toInt), myTeam)
                 }
                 case "DISCARD" => Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
+                case "AUTOMATED" => Filler.fillAutomateds( cardDetails.tail.map(_.toInt), myTeam)
                 case "OPPONENT_CARDS" =>  Filler.fillDeck( cardDetails.tail.map(_.toInt), ennemyTeam)
+                case "OPPONENT_AUTOMATED" =>
                 case _ => 
             }
         }
