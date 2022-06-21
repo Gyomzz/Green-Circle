@@ -31,7 +31,7 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     var deck: ListBuffer[Card] = new ListBuffer[Card]
     var hand: ListBuffer[Card] = new ListBuffer[Card]
     var draw: ListBuffer[Card] = new ListBuffer[Card]
-    var acceptableDebt = 3
+    var acceptableDebt = 2
 
     def bonusAmount(): Int = {
         hand.filter(_.name == "BONUS").length
@@ -184,7 +184,7 @@ object Needs {
 }
 
 object Choices {
-    val cardPriority = List("CONTINUOUS_INTEGRATION", "REFACTORING", "CODING", "ARCHITECTURE_STUDY",  "DAILY_ROUTINE", "TASK_PRIORITIZATION",  "TRAINING",  "CODE_REVIEW")
+    val cardPriority = List("CONTINUOUS_INTEGRATION", "REFACTORING", "TASK_PRIORITIZATION", "CODING", "ARCHITECTURE_STUDY",  "DAILY_ROUTINE", "TRAINING",  "CODE_REVIEW")
 
     def cardsValue(team: Team, ennemyTeam: Team): List[String] = {
         var cardToPlay = cardPriority
@@ -192,7 +192,7 @@ object Choices {
         cardToPlay = cardToPlay.filter(_ != "REFACTORING")
         if(!team.shouldDraw) cardToPlay = cardToPlay.filter(_ != "CODING")
         if(!team.haveCI || !team.canCI) cardToPlay = cardToPlay.filter(_ != "CONTINUOUS_INTEGRATION")
-        if(!team.canTaskPrio) cardToPlay = cardToPlay.filter(_ != "TASK_PRIORITIZATION")
+        if(!team.canTaskPrio || team.score != 4) cardToPlay = cardToPlay.filter(_ != "TASK_PRIORITIZATION")
         if(!team.shouldDraw) cardToPlay = cardToPlay.filter(_ != "TRAINING")
         cardToPlay
     }
@@ -233,8 +233,7 @@ object Choices {
     }
 
     def findBestZone(team: Team, disturbLocation: List[Int]): Int = {
-        if(team.debtAmount > 4) closestSpot(team.location, List(1, 2, 3, 4, 5, 7).filter(!disturbLocation.contains(_)))
-        else closestSpot(team.location, List(1, 2, 3, 4, 5).filter(!disturbLocation.contains(_)))
+        closestSpot(team.location, List(1, 2, 3, 4, 5, 7).filter(!disturbLocation.contains(_)))
     }
 
     def closestSpot(teamLocation: Int, mostWantedZone: List[Int]): Int = {
