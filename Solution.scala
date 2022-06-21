@@ -81,12 +81,13 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     }
 
     def shouldDraw(): Boolean = {
-        !drawOnlyDebt && draw.length > 2 
+        hand.filter(_.name == "BONUS").length + hand.filter(_.name == "TRAINING").length == hand.length || 
+        hand.filter(_.name == "TECHNICAL_DEBT").length + hand.filter(_.name == "TRAINING").length == hand.length
     }
 
     def canReleaseWithMove(disturbLocation: List[Int]): Boolean = {
         if(disturbLocation.contains(lastCardNeedZone) == false
-        && appWithLeastDebt.debtCost(this) + 2 == acceptableDebt
+        && appWithLeastDebt.debtCost(this) - 3 <= acceptableDebt
         && lastCardNeedZone != 9 
         && lastCardNeedZone != location) 
         true else false
@@ -214,11 +215,11 @@ object Needs {
 }
 
 object Choices {
-    val cardPriority = List("ARCHITECTURE_STUDY", "CONTINUOUS_INTEGRATION", "TRAINING",  "REFACTORING", "CODE_REVIEW", "TASK_PRIORITIZATION", "DAILY_ROUTINE")
+    val cardPriority = List("ARCHITECTURE_STUDY", "CONTINUOUS_INTEGRATION", "TRAINING",  "DAILY_ROUTINE", "CODE_REVIEW", "TASK_PRIORITIZATION")
 
     def cardsValue(team: Team, ennemyTeam: Team): List[String] = {
         var cardToPlay = cardPriority
-        if(team.debtAmount < 6) cardToPlay = cardToPlay.filter(_ != "REFACTORING")
+        if(team.dailyCardsPlayed != 0) cardToPlay = cardToPlay.filter(_ != "DAILY_ROUTINE")
         if(!team.shouldDraw) cardToPlay = cardToPlay.filter(_ != "TRAINING")
         if(!team.canCI) cardToPlay = cardToPlay.filter(_ != "CONTINUOUS_INTEGRATION")
         if(!team.canTaskPrio) cardToPlay = cardToPlay.filter(_ != "TASK_PRIORITIZATION")
