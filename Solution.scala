@@ -3,219 +3,288 @@ import scala.util._
 import scala.io.StdIn._
 import scala.collection.mutable._
 
-object CardType extends Enumeration {
-    type CardType = Value
-    val TRAINING                = Value(0, "TRAINING")
-    val CODING                  = Value(1, "CODING")
-    val DAILY_ROUTINE           = Value(2, "DAILY_ROUTINE")
-    val TASK_PRIORITIZATION     = Value(3, "TASK_PRIORITIZATION")
-    val ARCHITECTURE_STUDY      = Value(4, "ARCHITECTURE_STUDY")
-    val CONTINUOUS_INTEGRATION  = Value(5, "CONTINUOUS_INTEGRATION")
-    val CODE_REVIEW             = Value(6, "CODE_REVIEW")
-    val REFACTORING             = Value(7, "REFACTORING")
-    val BONUS                   = Value(8, "BONUS")
-    val TECHNICAL_DEBT          = Value(9, "TECHNICAL_DEBT")
-}
+case class Skill(val id: Int, val name: String, val amountNeeded: Int)
 
-case class Card(val name: String, var amount: Int)
+class Application(val id: Int, val skillsNeeds: Array[Skill]) {
 
-class Application(val datas: Array[Int]) {
-    val id: Int = datas(0)
-    val ressources = new Array[Card](8)
+    def cost(): Int = {
+        skillsNeeds.map(_.amountNeeded).sum
+    }
 
-    def setData() {
-        for(i <- 1 until datas.length) {
-            if(datas(i) >= 1) ressources(i - 1) = Card(CardType(i - 1).toString, datas(i)) else ressources(i - 1) = Card(CardType(i - 1).toString, 0)
+    def technicalPoints(teamHand: ListBuffer[Card], teamBonusAmount: Int): Int = {
+        var tech = 0
+        for(skill <- skillsNeeds) {
+            tech += (teamHand.filter(_.name == skill.name).take(skill.amountNeeded / 2).length * 2)  
         }
+        tech += teamBonusAmount
+        tech
     }
 
-    def getCards(): Array[Card] = {
-        ressources.filter(_.amount != 0)
-    }
-
-    def getType(): String = {
-        if(getCards.map(_.amount).sum <= 6) "small" else "big"
-    }
-    
-    def getCardsNeeded(numberOfCompensation: Int, skillName: String): Array[Card] = {
-        for(card <- ressources) {
-            if(card.name == skillName) {
-                card.amount = card.amount - (2 * numberOfCompensation)
-            }
-        }
-        getCards
+    def debtCost(team: Team): Int = {
+        if(cost < technicalPoints(team.hand, team.bonusAmount)) 0 else cost - technicalPoints(team.hand, team.bonusAmount)
     }
 }
 
-class Player(details: Array[Int]) {
-    val location: Int = details(0)
-    val score: Int = details(1)
-    val dailyRoutineCards: Int = details(2)
-    val architectureStudyCards: Int = details(3)
+case class Card(val id: Int, val name: String)
+
+class Team(val appsToRelease: Array[Application], val location: Int, val score: Int, val dailyCardsPlayed: Int, val archCardsPlayed: Int) {
+    var deck: ListBuffer[Card] = new ListBuffer[Card]
+    var hand: ListBuffer[Card] = new ListBuffer[Card]
+    var draw: ListBuffer[Card] = new ListBuffer[Card]
     var acceptableDebt = 3
 
-    def releaseApp(app: Application, cards: Array[Card], ennemyScore: Int): Unit = {
-        if(shouldRelease(cards, app) || this.score == 4 || ennemyScore == 4) { 
-            println("RELEASE " + app.id) 
-        }
-        else {
-            Console.err.println("Debt too high : " +debtCount(cards, app) + " waiting")
-            waiting
-        }
+    def bonusAmount(): Int = {
+        hand.filter(_.name == "BONUS").length
     }
 
-    def shouldRelease(cards: Array[Card], app: Application): Boolean = {
-        debtCount(cards, app) < acceptableDebt
+    def debtAmount(): Int = {
+        deck.filter(_.name == "TECHNICAL_DEBT").length
     }
 
-    def debtCount(cards: Array[Card], app: Application): Int = {
-        val numberOfBonus = Math.abs(cards.filter(_.name == "BONUS").length / 2)
-        val cardsName = cards.map(_.name)
-        val skillNeed = app.getCards
-        var debt = 0
-        for(skill <- skillNeed) {
-            cards.find(_.name == skill.name) match {
-                case Some(card) => if(card.amount != skill.amount / 2) debt += Math.abs(card.amount - (skill.amount / 2))
-                case None => debt += 2
-            }
-        }
-        debt -= numberOfBonus
-        debt
-    }
-     
-    def move(zoneId: Int): Unit = {
-        Console.err.println("Moving to : " + CardType(zoneId))
-        println("MOVE " + zoneId)
+    def appWithLeastDebt(): Application = {
+        appsToRelease.reduceLeft(appDebt)
     }
 
-    def giveCard(cardName: String): Unit = {
-        Console.err.println("Giving card : " + cardName)
-        println("GIVE " + getCardId(cardName))
-    }
-
-    def workApp(app: Application, ennemyLocation: Int, debtCard: Card): Unit = {
-        val cardToGet = List(7, getCardId(Utils.getMissingSkills(app).head.name), 4, 6, 0).filter(_ != location)
-        val cardToGetWithoutDebt = cardToGet.filter(_ != 7)
-        val gonnaGiveCardToEnnemy = List(Math.abs(ennemyLocation - 1), ennemyLocation, Math.abs(ennemyLocation + 1))
-
-        if(debtCard.amount > 4) move(getClosestSafeSpot(gonnaGiveCardToEnnemy, cardToGet))
-        else move(getClosestSafeSpot(gonnaGiveCardToEnnemy, cardToGetWithoutDebt))
-    }
-
-    def getClosestSafeSpot(ennemySpot: List[Int], spots: List[Int]): Int = {
-        var freeSpot: ListBuffer[Int] = ListBuffer()
-        for(spot <- spots) {
-            if(!ennemySpot.contains(spot)) {
-                freeSpot += spot
-            }
-        }
-        freeSpot.head
+    def appDebt(app1: Application, app2: Application): Application = {
+        if(app1.debtCost(this) < app2.debtCost(this) ) app1 else app2
     }
     
-    def getCardId(cardName: String): Int = {
-        CardType.values.find(_.toString == cardName) match {
-            case Some(card) => card.id
-            case None => this.location
-        }
-    }   
-
-    def random(): Unit = {
-        println("RANDOM")
+    def shouldRelease(app: Application): Boolean = {
+        if(almostFinish) acceptableDebt = 0
+        app.debtCost(this) <= acceptableDebt
     }
 
-    def waiting(): Unit = {
-        println("WAIT")
+    def almostFinish(): Boolean = {
+        score == 4
+    }
+
+    def haveDebtInHand(): Boolean = {
+        hand.filter(_.name == "TECHNICAL_DEBT").length > 0
+    }
+
+    def drawOnlyDebt(): Boolean = {
+        draw.filter(_.name == "TECHNICAL_DEBT").length == draw.length
+    }
+
+    def shouldDraw(): Boolean = {
+        !drawOnlyDebt && canDraw || drawOnlyDebt && hand.filter(_.name == "REFACTORING").length != 0
+    }
+
+    def canDraw(): Boolean = {
+        draw.length > 2 
+    }
+
+    def haveCI(): Boolean = {
+        hand.filter(_.name == "CONTINUOUS_INTEGRATION").length != 0
+    }
+
+    def haveMoreThanOneCI(): Boolean = {
+        hand.filter(_.name == "CONTINUOUS_INTEGRATION").length > 1
+    }
+
+    def canCI(): Boolean = {
+        hand.filter(_.name != "TECHNICAL_DEBT")
+            .filter(card => Needs.mostWanted.map(_.name).contains(card.name))
+            .length > 1
+    }
+
+    def canTaskPrio(): Boolean = {
+        hand.filter(_.name == "BONUS").length != 0
     }
 }
 
-object Utils {
-    val holdingCards = new Array[Card](10)
+object CardType {
+    val list = List(
+        Card(0, "TRAINING"),
+        Card(1, "CODING"),
+        Card(2, "DAILY_ROUTINE"),
+        Card(3, "TASK_PRIORITIZATION"),
+        Card(4, "ARCHITECTURE_STUDY"),
+        Card(5, "CONTINUOUS_INTEGRATION"),
+        Card(6, "CODE_REVIEW"),
+        Card(7, "REFACTORING"),
+        Card(8, "BONUS"),
+        Card(9, "TECHNICAL_DEBT")
+    )
+}
+
+object Filler {
+    def addToDeck(card: Card, numberOfCards: Int, team: Team): Unit = {
+        for(i <- 0 until numberOfCards) {
+            team.deck += card
+        }
+    }
+
+    def addToHand(card: Card, numberOfCards: Int, team: Team): Unit = {
+        for(i <- 0 until numberOfCards) {
+            team.hand += card
+        }
+    }
+
+    def addToDraw(card: Card, numberOfCards: Int, team: Team): Unit = {
+        for(i <- 0 until numberOfCards) {
+            team.draw += card
+        }
+    }
+
+    def fillDeck(cards: Array[Int], team: Team): Unit ={
+        for(i <- 0 until cards.length) {
+            if(cards(i) != 0) addToDeck(Card(i, CardType.list(i).name), cards(i), team)
+        }
+    }
+
+    def fillDraw(cards: Array[Int], team: Team): Unit ={
+        for(i <- 0 until cards.length) {
+            if(cards(i) != 0) addToDraw(Card(i, CardType.list(i).name), cards(i), team)
+        }
+    }
     
-    def fillCard(cardsCount: Array[Int], cardsLocation: Array[Card]) {
-        for(i <- 0 until cardsCount.length) cardsLocation(i) = Card(CardType(i).toString, cardsCount(i).toInt)
+    def fillHand(cards: Array[Int], team: Team): Unit ={
+        for(i <- 0 until cards.length) {
+            if(cards(i) != 0) addToHand(Card(i, CardType.list(i).name), cards(i), team)
+        }
+    }
+}
+
+case class Need(val typeId: Int, val name: String, var amount: Int)
+
+object Needs {
+    val list: List[Need] = List(
+        Need(0, "TRAINING", 0),
+        Need(1, "CODING", 0),
+        Need(2, "DAILY_ROUTINE", 0),
+        Need(3, "TASK_PRIORITIZATION", 0),
+        Need(4, "ARCHITECTURE_STUDY", 0),
+        Need(5, "CONTINUOUS_INTEGRATION", 0),
+        Need(6, "CODE_REVIEW", 0),
+        Need(7, "REFACTORING", 0),
+        Need(8, "BONUS", 1)
+    )
+
+    def update(app: Application): Unit = {
+        for(skill <- app.skillsNeeds) {
+            list.find(_.name == skill.name) match {
+                case Some(need) => need.amount += skill.amountNeeded
+                case _ =>
+            }
+        }
     }
 
-    // skills 
-    def findAppToRelease(apps: Array[Application]): Application = {
-        getLowestSkillMissingApp(apps)
+    def resetNeed(): Unit = {
+        list.foreach(_.amount = 0)
     }
 
-    def getAmountOfSkillMissing(app: Application): Int = {
-        val skillNeed = app.getCards
-        var amountMissing = 0
-        for(i <- 0 until skillNeed.length) {
-            if(skillNeed(i).amount >= 1) {
-                holdingCards.find(_.name == skillNeed(i).name) match {
-                    case Some(card) => if(card.amount != skillNeed(i).amount / 2) amountMissing += (skillNeed(i).amount / 2) - card.amount
-                    case None => amountMissing += 2
+    def mostWanted(): List[Need] = {
+        list.filter(_.amount != 0).sortWith(_.amount > _.amount)
+    }
+
+    def leastWanted(): List[Need] = {
+        list.sortWith(_.amount < _.amount)
+    }
+}
+
+object Choices {
+    val cardPriority = List("CONTINUOUS_INTEGRATION", "REFACTORING", "CODING", "ARCHITECTURE_STUDY",  "DAILY_ROUTINE", "TASK_PRIORITIZATION",  "TRAINING",  "CODE_REVIEW")
+
+    def cardsValue(team: Team, ennemyTeam: Team): List[String] = {
+        var cardToPlay = cardPriority
+        if(team.score >= ennemyTeam.score + 2 || team.debtAmount == 0) 
+        cardToPlay = cardToPlay.filter(_ != "REFACTORING")
+        if(!team.shouldDraw) cardToPlay = cardToPlay.filter(_ != "CODING")
+        if(!team.haveCI || !team.canCI) cardToPlay = cardToPlay.filter(_ != "CONTINUOUS_INTEGRATION")
+        if(!team.canTaskPrio) cardToPlay = cardToPlay.filter(_ != "TASK_PRIORITIZATION")
+        if(!team.shouldDraw) cardToPlay = cardToPlay.filter(_ != "TRAINING")
+        cardToPlay
+    }
+
+    def playBestCard(team: Team, ennemyTeam: Team): Unit = {
+        if(team.shouldRelease(team.appWithLeastDebt)) println("WAIT")
+        else if(team.hand.map(_.name).filter(cardsValue(team, ennemyTeam).contains(_)).length != 0) {
+            team.hand.map(_.name).filter(cardsValue(team, ennemyTeam).contains(_)).head match {
+                case "CONTINUOUS_INTEGRATION" => {
+                    if(team.bonusAmount != 0) println("CONTINUOUS_INTEGRATION " + 8)
+                    else if(Needs.mostWanted.filter(team.hand.contains(_)).length != 0)
+                        println("CONTINUOUS_INTEGRATION " + Needs.mostWanted.filter(team.hand.contains(_)).head.typeId)
+                    else {
+                        if(team.haveMoreThanOneCI) 
+                        println("CONTINUOUS_INTEGRATION " + team.hand.filter(_.name != "TECHNICAL_DEBT").head.id)
+                        else
+                        println("CONTINUOUS_INTEGRATION " + 
+                        team.hand.filter(_.name != "TECHNICAL_DEBT").filter(_.name != "CONTINUOUS_INTEGRATION").head.id)
+                    } 
                 }
+                case "TASK_PRIORITIZATION" => println("TASK_PRIORITIZATION " + 8 + " " + Needs.mostWanted.head.typeId)
+                case "DAILY_ROUTINE" => println("DAILY_ROUTINE")
+                case _ => println(team.hand.map(_.name).filter(cardsValue(team, ennemyTeam).contains(_)).head)
             }
         }
-        amountMissing
+        else println("WAIT")
     }
 
-    def appToWork(app1: Application, app2: Application): Application = {
-        if(getMissingSkills(app1).length < getMissingSkills(app2).length && getMissingSkills(app1).length > 0) app1 else app2
+    def leastNeedCard(team: Team): Card = {
+        getCardByName(team.hand.map(_.name)
+            .filter(Needs.leastWanted.map(_.name).contains(_))
+            .head
+        )
     }
 
-    def findAppToWork(apps: Array[Application]): Application = {
-        apps.reduceLeft(appToWork)
+    def getCardByName(cardName: String): Card = {
+        CardType.list.filter(_.name == cardName).head
     }
 
-    def getMissingSkills(app: Application): Array[Card] = {
-        val skillNeed = app.getCards
-        val cardsNeeded = new Array[Card](skillNeed.length)
-        for(i <- 0 until skillNeed.length) {
-            holdingCards.find(_.name == skillNeed(i).name) match {
-                case Some(card) => if(card.amount != skillNeed(i).amount / 2) cardsNeeded(i) = Card(skillNeed(i).name,skillNeed(i).amount / 2 - card.amount)
-                case None => cardsNeeded(i) = Card(skillNeed(i).name, skillNeed(i).amount / 2)
-            }
+    def findBestZone(team: Team, disturbLocation: List[Int]): Int = {
+        if(team.debtAmount > 4) closestSpot(team.location, List(1, 2, 3, 4, 5, 7).filter(!disturbLocation.contains(_)))
+        else closestSpot(team.location, List(1, 2, 3, 4, 5).filter(!disturbLocation.contains(_)))
+    }
+
+    def closestSpot(teamLocation: Int, mostWantedZone: List[Int]): Int = {
+        if(teamLocation != 7 && mostWantedZone.filter(_ > teamLocation).length != 0) 
+            mostWantedZone.filter(_ > teamLocation).min
+        else 
+            mostWantedZone.filter(_ < teamLocation).min
+    }
+
+    def daily(team: Team, disturbLocation: List[Int]): Unit = {
+        Console.err.println("Daily is ok")
+        if(Choices.findBestZone(team, disturbLocation) + team.dailyCardsPlayed == 4 && 
+        Choices.findBestZone(team, disturbLocation) != 7) 
+            println("MOVE " + Choices.findBestZone(team, disturbLocation) + " 4")
+        else if(
+            Choices.findBestZone(team, disturbLocation) + team.dailyCardsPlayed == 5 && 
+            Choices.findBestZone(team, disturbLocation) != 7 || 
+            Choices.findBestZone(team, disturbLocation) - team.dailyCardsPlayed == 5 && 
+            Choices.findBestZone(team, disturbLocation) != 7
+        ) println("MOVE " + Choices.findBestZone(team, disturbLocation) + " 5")
+        else println("MOVE " + Choices.findBestZone(team, disturbLocation))
+    }
+}
+
+object GamePhase {
+    def move(team: Team, disturbLocation: List[Int]): Unit = {
+        if(team.dailyCardsPlayed != 0) {
+            Choices.daily(team, disturbLocation)
+        } else {
+            println("MOVE " + Choices.findBestZone(team, disturbLocation))
         }
-        cardsNeeded.filter(_ != null)
     }
 
-    def skillMissingApp(app1: Application, app2: Application): Application = {
-        if(getAmountOfSkillMissing(app1) < getAmountOfSkillMissing(app2)) app1 else app2
+    def release(team: Team): Unit = {
+        if(team.shouldRelease(team.appWithLeastDebt)) println("RELEASE " + team.appWithLeastDebt.id)
+        else println("WAIT")
     }
 
-    def getLowestSkillMissingApp(apps: Array[Application]): Application = {
-        apps.reduceLeft(skillMissingApp)
+    def giveCard(team: Team): Unit = {
+        Console.err.println("giving : " + Choices.leastNeedCard(team).name)
+        println("GIVE " + Choices.leastNeedCard(team).id)
     }
 
-    def skillCompensator(cards: Array[Card]): Int = {
-        cards.find(_.name == "BONUS") match {
-            case Some(card) => Math.floor(card.amount / 2).toInt
-            case None => 0
-        }
+    def throwCard(team: Team): Unit = {
+        Console.err.println("trhowing : " + Choices.leastNeedCard(team).name)
+        println("THROW " + Choices.leastNeedCard(team).id)
     }
 
-    // cards 
-    def noNeedCardForApp(app: Application): Array[String] = {
-        holdingCards.filter(_.amount != 0).map(_.name).filter(!app.getCards.map(_.name).contains(_)).filter(_ != "TECHNICAL_DEBT").length match {
-            case 0 => holdingCards.filter(_.amount != 0).map(_.name).filter(_ != "TECHNICAL_DEBT")
-            case _ => holdingCards.filter(_.amount != 0).map(_.name).filter(!app.getCards.map(_.name).contains(_)).filter(_ != "TECHNICAL_DEBT")
-        }
-    }
-
-    def findLeastNeededCard(app: Application): String = {
-        noNeedCardForApp(app).head
-    }
-
-    def findPlayCards(): Array[String] = {
-        val cards = holdingCards.filter(_.amount != 0).filter(_.name != "TECHNICAL_DEBT").map(_.name)
-        val cardsToPlay = Array("TRAINING", "ARCHITECTURE_STUDY", "CODE_REVIEW", "REFACTORING")
-        val playableCards = cards.filter(cardsToPlay.contains(_))
-        playableCards
-    }
-
-    def playCard(): String = {
-        Console.err.println("Playing Card : " + cardToPlayPriority.filter(findPlayCards.contains(_)).head)
-        cardToPlayPriority.filter(findPlayCards.contains(_)).head
-    }
-
-    def cardToPlayPriority(): Array[String] = {
-        if(holdingCards.filter(_.name == "TECHNICAL_DEBT").length != 0) Array("REFACTORING", "ARCHITECTURE_STUDY", "CODE_REVIEW", "TRAINING")
-        else Array("ARCHITECTURE_STUDY", "CODE_REVIEW", "TRAINING", "REFACTORING")
+    def playCard(team: Team, ennemyTeam: Team): Unit = {
+        Choices.playBestCard(team, ennemyTeam)
     }
 }
 
@@ -226,66 +295,103 @@ object Player extends App {
 
     // game loop
     while(true) {
-        val gamePhase = readLine // can be MOVE, GIVE_CARD, THROW_CARD, PLAY_CARD or RELEASE
+        val gamePhase = readLine // can be MOVE, GIVE_CARD, THROW_CARD, PLAY_CARD or RELEASE        
 
-        // ----- APPLICATIONS ----- //
+        // --- APPLICATIONS --- //
         val applicationsCount = readLine.toInt
         val applications = new Array[Application](applicationsCount)
         for(i <- 0 until applicationsCount) {
-            applications(i) = new Application(readLine.split(" ").filter(_ != "APPLICATION").map (_.toInt))
-            applications(i).setData
+            // trainingNeeded: number of TRAINING skills needed to release this application
+            // codingNeeded: number of CODING skills needed to release this application
+            // dailyRoutineNeeded: number of DAILY_ROUTINE skills needed to release this application
+            // taskPrioritizationNeeded: number of TASK_PRIORITIZATION skills needed to release this application
+            // architectureStudyNeeded: number of ARCHITECTURE_STUDY skills needed to release this application
+            // continuousDeliveryNeeded: number of CONTINUOUS_DELIVERY skills needed to release this application
+            // codeReviewNeeded: number of CODE_REVIEW skills needed to release this application
+            // refactoringNeeded: number of REFACTORING skills needed to release this application
+            val Array(objectType, _id, _trainingNeeded, _codingNeeded, _dailyRoutineNeeded, _taskPrioritizationNeeded, _architectureStudyNeeded, _continuousDeliveryNeeded, _codeReviewNeeded, _refactoringNeeded) = readLine split " "
+            val id = _id.toInt
+            val trainingNeeded = _trainingNeeded.toInt
+            val codingNeeded = _codingNeeded.toInt
+            val dailyRoutineNeeded = _dailyRoutineNeeded.toInt
+            val taskPrioritizationNeeded = _taskPrioritizationNeeded.toInt
+            val architectureStudyNeeded = _architectureStudyNeeded.toInt
+            val continuousDeliveryNeeded = _continuousDeliveryNeeded.toInt
+            val codeReviewNeeded = _codeReviewNeeded.toInt
+            val refactoringNeeded = _refactoringNeeded.toInt
+
+            applications(i) = new Application(id, Array(
+                Skill(0, "TRAINING", trainingNeeded.toInt),
+                Skill(1, "CODING", codingNeeded.toInt),
+                Skill(2, "DAILY_ROUTINE", dailyRoutineNeeded.toInt),
+                Skill(3, "TASK_PRIORITIZATION", taskPrioritizationNeeded.toInt),
+                Skill(4, "ARCHITECTURE_STUDY", architectureStudyNeeded.toInt),
+                Skill(5, "CONTINUOUS_INTEGRATION", continuousDeliveryNeeded.toInt),
+                Skill(6, "CODE_REVIEW", codeReviewNeeded.toInt),
+                Skill(7, "REFACTORING", refactoringNeeded.toInt)
+                )
+            )
         }
 
-        // ----- PLAYER ----- //
-        val players = new Array[Player](2)
+        // --- PLAYER --- //
+        val companies = new Array[Team](2)
         for(i <- 0 until 2) {
-            players(i) = new Player((readLine split " ").filter(_ != "").map (_.toInt))
+            // playerLocation: id of the zone in which the player is located
+            // playerPermanentDailyRoutineCards: number of DAILY_ROUTINE the player has played. It allows them to take cards from the adjacent zones
+            // playerPermanentArchitectureStudyCards: number of ARCHITECTURE_STUDY the player has played. It allows them to draw more cards
+            val Array(playerLocation, playerScore, playerPermanentDailyRoutineCards, playerPermanentArchitectureStudyCards) = (readLine split " ").filter(_ != "").map (_.toInt)
+            companies(i) = new Team(applications.sortWith(_.cost < _.cost), playerLocation, playerScore, playerPermanentDailyRoutineCards, playerPermanentArchitectureStudyCards)
         }
-        val dev = players(0)
-        val boss = players(1)
+        val myTeam = companies(0)
+        val ennemyTeam = companies(1)  
 
-        // ----- CARDS ----- //
-        val myCardsInHand       = new Array[Card](10)
-        val myDrawPile          = new Array[Card](10)
-        val myDiscardPile       = new Array[Card](10)
-        val myAutomatedCards    = new Array[Card](10)
-        var debtCard = Card("TECHNICAL_DEBT", 0)
+        // --- CARDS --- //
         val cardLocationsCount = readLine.toInt
         for(i <- 0 until cardLocationsCount) {
             // cardsLocation: the location of the card list. It can be HAND, DRAW, DISCARD or OPPONENT_CARDS (AUTOMATED and OPPONENT_AUTOMATED will appear in later leagues)
-            val cardsDetails = readLine.split(" ")
-            cardsDetails(0) match {
-                case "HAND"         => 
-                    Utils.fillCard(cardsDetails.tail.map (_.toInt), Utils.holdingCards)
-                    Utils.fillCard(cardsDetails.tail.map (_.toInt), myCardsInHand)
-                case "DRAW"         => Utils.fillCard(cardsDetails.tail.map (_.toInt), myDrawPile)
-                case "DISCARD"      => Utils.fillCard(cardsDetails.tail.map (_.toInt), myDiscardPile)
-                case "AUTOMATED"    => Utils.fillCard(cardsDetails.tail.map (_.toInt), myAutomatedCards)
-                case _              => 
-            }
-            if(cardsDetails(0) == "HAND" || cardsDetails(0) == "DRAW" || cardsDetails(0) == "DISCARD" ) {
-                debtCard.amount += cardsDetails(9).toInt
+            val cardDetails: Array[String] = readLine split " "
+            
+            cardDetails(0) match {
+                case "HAND" => {
+                    Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
+                    Filler.fillHand( cardDetails.tail.map(_.toInt), myTeam)
+                }
+                case "DRAW" => {
+                    Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
+                    Filler.fillDraw( cardDetails.tail.map(_.toInt), myTeam)
+                }
+                case "DISCARD" => Filler.fillDeck( cardDetails.tail.map(_.toInt), myTeam)
+                case "OPPONENT_CARDS" =>  Filler.fillDeck( cardDetails.tail.map(_.toInt), ennemyTeam)
+                case _ => 
             }
         }
 
-        // ----- MOVES ----- //
-        val movesCount = readLine.toInt
-        val moves = new Array[String](movesCount)
-        for(i <- 0 until movesCount) {
-            moves(i) = readLine
-        }
+        // --- NEEDS --- //
+        Needs.resetNeed
+        applications.foreach(Needs.update)
 
+        // --- MOVES --- //
+        val possibleMovesCount = readLine.toInt
+        for(i <- 0 until possibleMovesCount) {
+            val possibleMove = readLine
+        }
+        val disturbLocation = List(Math.abs(ennemyTeam.location - 1), ennemyTeam.location, Math.abs(ennemyTeam.location + 1))
+        Console.err.println(myTeam.dailyCardsPlayed)
+        Console.err.println(myTeam.archCardsPlayed)
         gamePhase match {
-            // First League
-            case "MOVE"         => dev.workApp(Utils.findAppToWork(applications), boss.location, debtCard)
-            case "RELEASE"      => dev.releaseApp(Utils.findAppToRelease(applications), Utils.holdingCards, boss.score)
-            // Later League
-            case "GIVE_CARD"    => dev.giveCard(Utils.findLeastNeededCard(Utils.findAppToRelease(applications)))
-            case "THROW_CARD"   => 
-            case "PLAY_CARD"    => println(Utils.playCard)
-            case _              => println("RANDOM")
+            case "MOVE"         => GamePhase.move(myTeam, disturbLocation)
+            case "RELEASE"      => GamePhase.release(myTeam)
+            case "GIVE_CARD"    => GamePhase.giveCard(myTeam)
+            case "THROW_CARD"   => GamePhase.throwCard(myTeam)
+            case "PLAY_CARD"    => GamePhase.playCard(myTeam, ennemyTeam)
+            case _              => 
         }
+        
+
+        // Write an action using println
+        // To debug: Console.err.println("Debug messages...")
+        
+
+        // In the first league: RANDOM | MOVE <zoneId> | RELEASE <applicationId> | WAIT; In later leagues: | GIVE <cardType> | THROW <cardType> | TRAINING | CODING | DAILY_ROUTINE | TASK_PRIORITIZATION <cardTypeToThrow> <cardTypeToTake> | ARCHITECTURE_STUDY | CONTINUOUS_DELIVERY <cardTypeToAutomate> | CODE_REVIEW | REFACTORING;
     }
 }
-
-// In the first league: RANDOM | MOVE <zoneId> | RELEASE <applicationId> | WAIT; In later leagues: | GIVE <cardType> | THROW <cardType> | TRAINING | CODING | DAILY_ROUTINE | TASK_PRIORITIZATION <cardTypeToThrow> <cardTypeToTake> | ARCHITECTURE_STUDY | CONTINUOUS_DELIVERY <cardTypeToAutomate> | CODE_REVIEW | REFACTORING;
