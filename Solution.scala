@@ -83,7 +83,9 @@ class Team(val appsToRelease: Array[Application], val location: Int, val score: 
     }
 
     def canCI(): Boolean = {
-        hand.filter(_.name != "TECHNICAL_DEBT").length > 1
+        hand.filter(_.name != "TECHNICAL_DEBT")
+            .filter(card => Needs.mostWanted.map(_.name).contains(card.name))
+            .length > 1
     }
 
     def canTaskPrio(): Boolean = {
@@ -156,7 +158,7 @@ object Needs {
         Need(5, "CONTINUOUS_INTEGRATION", 0),
         Need(6, "CODE_REVIEW", 0),
         Need(7, "REFACTORING", 0),
-        Need(8, "BONUS", 0)
+        Need(8, "BONUS", 1)
     )
 
     def update(app: Application): Unit = {
@@ -182,11 +184,11 @@ object Needs {
 }
 
 object Choices {
-    val cardPriority = List("REFACTORING", "CONTINUOUS_INTEGRATION", "CODING", "ARCHITECTURE_STUDY",  "DAILY_ROUTINE", "TASK_PRIORITIZATION",  "TRAINING",  "CODE_REVIEW")
+    val cardPriority = List("CONTINUOUS_INTEGRATION", "REFACTORING", "CODING", "ARCHITECTURE_STUDY",  "DAILY_ROUTINE", "TASK_PRIORITIZATION",  "TRAINING",  "CODE_REVIEW")
 
     def cardsValue(team: Team, ennemyTeam: Team): List[String] = {
         var cardToPlay = cardPriority
-        if(team.score >= ennemyTeam.score + 1 || team.debtAmount == 0) 
+        if(team.score >= ennemyTeam.score + 2 || team.debtAmount == 0) 
         cardToPlay = cardToPlay.filter(_ != "REFACTORING")
         if(!team.shouldDraw) cardToPlay = cardToPlay.filter(_ != "CODING")
         if(!team.haveCI || !team.canCI) cardToPlay = cardToPlay.filter(_ != "CONTINUOUS_INTEGRATION")
